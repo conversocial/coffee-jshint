@@ -32,22 +32,33 @@ hintFiles = (paths, config, log) ->
       source = fs.readFileSync(path)
       source = source.toString()
     catch err
-      if config.verbose then console.log "Error reading #{path}"
-      return []
+      errors = [createInternalError(path, "Error reading #{path}")]
+      if log
+          console.log formatErrors path, errors
+      return errors
 
     if config.react
         try
           source = CoffeeReactTransform source
         catch err
-          if config.verbose then console.log "Error transforming #{path}"
-          return []
+          errors = [createInternalError(path, "Error transforming #{path}")]
+          if log
+            console.log formatErrors path, errors
+          return errors
+    try
+        errors = hint source, options, buildTrueObj config.globals
+    catch err
+        errors = [createInternalError(path, "Error processing #{path}")]
+        if log
+            console.log formatErrors path, errors
+        return errors
 
-    errors = hint source, options, buildTrueObj config.globals
+    errors = addPathToErrors(path, errors)
 
     if log and errors.length > 0
-      console.log "--------------------------------"
       console.log formatErrors path, errors
-    errors
+
+    return errors
 
 hint = (coffeeSource, options, globals) ->
   csOptions = sourceMap: true, filename: "doesn't matter"
@@ -56,7 +67,7 @@ hint = (coffeeSource, options, globals) ->
     []
   else if not jshint.errors?
     console.log "jshint didn't pass but returned no errors"
-    []
+    [createInternalError("jshint didn't pass but returned no errors")]
   else
     _.chain(jshint.errors)
       # Last jshint.errors item could be null if it bailed because too many errors
@@ -73,6 +84,7 @@ hint = (coffeeSource, options, globals) ->
       .value()
 
 formatErrors = (path, errors) ->
+  "--------------------------------\n" +
   "#{path}\n" +
   _(errors)
     .map (error) ->
@@ -81,5 +93,21 @@ formatErrors = (path, errors) ->
 
 buildTrueObj = (keys) ->
   _.object keys, (true for i in [0..keys.length])
+
+createInternalError = (path, errString) ->
+    # This creates an error object which looks like a jshint error but is
+    # for an internal failure.
+    return {
+        path: path,
+        line: '??',
+        character: '??',
+        reason: errString
+    }
+
+addPathToErrors = (path, errors) ->
+    for error in errors
+        error.path = path
+
+    return errors
 
 module.exports = hintFiles

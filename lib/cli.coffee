@@ -1,5 +1,7 @@
 _ = require "underscore"
 hintFiles = require("./lib-js/hint")
+junitReporter = require("./lib-js/junit_reporter")
+
 {argv, help} = require("optimist")
   .usage('$0 [options] filename.coffee ...')
   .options
@@ -12,6 +14,9 @@ hintFiles = require("./lib-js/hint")
     globals:
       alias: 'g'
       describe: 'comma separated list of global variable names to permit'
+    junit:
+      alias: 'j'
+      describe: 'location to write junit xml output to'
     react:
       alias: 'r'
       type: 'boolean'
@@ -47,7 +52,13 @@ switch
       verbose: argv.verbose
       react: argv.react
     , true)
-    if _.flatten(errors).length is 0
+
+    errors = _.flatten(errors)
+
+    if argv.junit
+        junitReporter(argv.junit, errors)
+
+    if errors.length is 0
       process.exit 0
     else
       process.exit 1
